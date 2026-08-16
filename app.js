@@ -274,7 +274,8 @@
         var input = document.createElement("input");
         input.type = "number";
         input.step = "1";
-        input.inputMode = "numeric";
+        // No inputmode override: iOS's "numeric" keypad hides the minus
+        // sign, but the default keyboard for type="number" includes it.
         input.autocomplete = "off";
         input.className = "score-cell";
         input.dataset.round = String(r);
