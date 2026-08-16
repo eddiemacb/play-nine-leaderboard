@@ -20,10 +20,21 @@
   function loadGame() {
     try {
       var raw = localStorage.getItem(STORAGE_GAME);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return isValidGameShape(parsed) ? parsed : null;
     } catch (e) {
       return null;
     }
+  }
+
+  // Guards against the older per-card-grid save format from before scoring
+  // was simplified to one number per round; a stale save in that shape is
+  // discarded rather than crashing the renderer.
+  function isValidGameShape(g) {
+    if (!g || !g.players || !g.players.length || !g.rounds || !g.rounds.length) return false;
+    var sample = g.rounds[0][g.players[0].id];
+    return !Array.isArray(sample);
   }
 
   function saveGame() {
@@ -57,45 +68,21 @@
   }
 
   // ---------- scoring ----------
-
-  // A column of 3 matching (and fully revealed) cards scores 0 instead of
-  // its sum -- the signature Play Nine rule.
-  function columnScore(vals) {
-    var filled = vals.every(function (v) { return v !== null && v !== undefined; });
-    if (filled && vals[0] === vals[1] && vals[1] === vals[2]) return 0;
-    return vals.reduce(function (sum, v) { return sum + (v || 0); }, 0);
-  }
-
-  function gridTotal(grid) {
-    var total = 0;
-    for (var col = 0; col < 3; col++) {
-      total += columnScore([grid[col], grid[col + 3], grid[col + 6]]);
-    }
-    return total;
-  }
-
-  function matchedColumns(grid) {
-    var cols = [];
-    for (var col = 0; col < 3; col++) {
-      var vals = [grid[col], grid[col + 3], grid[col + 6]];
-      var filled = vals.every(function (v) { return v !== null && v !== undefined; });
-      if (filled && vals[0] === vals[1] && vals[1] === vals[2]) cols.push(col);
-    }
-    return cols;
-  }
+  // Each round is a single golf-style score per player (lower is better;
+  // negative scores are allowed). The app just totals them -- it doesn't
+  // model cards, deals, or turns.
 
   function playerCumulative(playerId) {
     var total = 0;
     for (var r = 0; r < state.rounds.length; r++) {
-      total += gridTotal(state.rounds[r][playerId]);
+      var v = state.rounds[r][playerId];
+      total += typeof v === "number" ? v : 0;
     }
     return total;
   }
 
-  function roundIsComplete(roundGrids) {
-    return state.players.every(function (p) {
-      return roundGrids[p.id].every(function (v) { return v !== null && v !== undefined; });
-    });
+  function roundIsComplete(round) {
+    return state.players.every(function (p) { return typeof round[p.id] === "number"; });
   }
 
   function gameIsComplete() {
@@ -200,18 +187,15 @@
   function startGame(players, numRounds) {
     var rounds = [];
     for (var r = 0; r < numRounds; r++) {
-      var roundGrids = {};
-      players.forEach(function (p) {
-        roundGrids[p.id] = new Array(9).fill(null);
-      });
-      rounds.push(roundGrids);
+      var round = {};
+      players.forEach(function (p) { round[p.id] = null; });
+      rounds.push(round);
     }
 
     state = {
       players: players,
       numRounds: numRounds,
       rounds: rounds,
-      currentRound: 0,
       gameOverDismissed: false
     };
 
@@ -229,16 +213,8 @@
     app.appendChild(tpl.content.cloneNode(true));
 
     renderLeaderboard();
-    renderRoundTabs();
-    renderRoundGrids();
+    renderScorecard();
     updateGameOverBanner();
-
-    document.getElementById("btnPrevRound").addEventListener("click", function () {
-      goToRound(state.currentRound - 1);
-    });
-    document.getElementById("btnNextRound").addEventListener("click", function () {
-      goToRound(state.currentRound + 1);
-    });
 
     document.getElementById("btnKeepPlaying").addEventListener("click", function () {
       state.gameOverDismissed = true;
@@ -248,14 +224,6 @@
     document.getElementById("btnSaveGame").addEventListener("click", function () {
       finishAndSaveGame();
     });
-  }
-
-  function goToRound(index) {
-    if (index < 0 || index >= state.numRounds) return;
-    state.currentRound = index;
-    saveGame();
-    renderRoundTabs();
-    renderRoundGrids();
   }
 
   function renderLeaderboard() {
@@ -283,121 +251,105 @@
     });
   }
 
-  function renderRoundTabs() {
-    var tabs = document.getElementById("roundTabs");
-    tabs.innerHTML = "";
+  function renderScorecard() {
+    var table = document.getElementById("scorecardTable");
+    table.innerHTML = "";
+
+    var thead = document.createElement("thead");
+    var headRow = document.createElement("tr");
+    headRow.appendChild(buildCell("th", "Round"));
+    state.players.forEach(function (p) { headRow.appendChild(buildCell("th", p.name)); });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    var tbody = document.createElement("tbody");
     for (var r = 0; r < state.numRounds; r++) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "round-tab" +
-        (r === state.currentRound ? " active" : "") +
-        (roundIsComplete(state.rounds[r]) ? " complete" : "");
-      btn.textContent = String(r + 1);
-      btn.addEventListener("click", (function (idx) {
-        return function () { goToRound(idx); };
-      })(r));
-      tabs.appendChild(btn);
-    }
+      var tr = document.createElement("tr");
+      var roundTh = buildCell("th", String(r + 1));
+      roundTh.setAttribute("scope", "row");
+      tr.appendChild(roundTh);
 
-    document.getElementById("btnPrevRound").disabled = state.currentRound === 0;
-    document.getElementById("btnNextRound").disabled = state.currentRound === state.numRounds - 1;
-  }
-
-  function renderRoundGrids() {
-    var container = document.getElementById("roundGrids");
-    container.innerHTML = "";
-    var tpl = document.getElementById("tpl-player-grid-card");
-    var grids = state.rounds[state.currentRound];
-
-    state.players.forEach(function (p) {
-      var node = tpl.content.cloneNode(true);
-      var card = node.querySelector(".player-grid-card");
-      card.dataset.playerId = p.id;
-      node.querySelector(".player-grid-name").textContent = p.name;
-
-      var cardGrid = node.querySelector(".card-grid");
-      var grid = grids[p.id];
-      for (var i = 0; i < 9; i++) {
+      state.players.forEach(function (p) {
+        var td = document.createElement("td");
         var input = document.createElement("input");
-        input.type = "text";
+        input.type = "number";
+        input.step = "1";
         input.inputMode = "numeric";
-        input.pattern = "[0-9]*";
-        input.maxLength = 2;
         input.autocomplete = "off";
-        input.className = "card-cell";
+        input.className = "score-cell";
+        input.dataset.round = String(r);
         input.dataset.playerId = p.id;
-        input.dataset.index = String(i);
-        input.value = grid[i] === null || grid[i] === undefined ? "" : String(grid[i]);
-        input.setAttribute("aria-label", p.name + " card " + (i + 1));
-        cardGrid.appendChild(input);
-      }
+        var v = state.rounds[r][p.id];
+        input.value = typeof v === "number" ? String(v) : "";
+        input.setAttribute("aria-label", "Round " + (r + 1) + ", " + p.name);
+        td.appendChild(input);
+        tr.appendChild(td);
+      });
 
-      container.appendChild(node);
-      updatePlayerCardUI(p.id);
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+
+    var tfoot = document.createElement("tfoot");
+    var totalRow = document.createElement("tr");
+    totalRow.appendChild(buildCell("th", "Total"));
+    state.players.forEach(function (p) {
+      var td = buildCell("td", String(playerCumulative(p.id)));
+      td.className = "total-cell";
+      td.dataset.playerId = p.id;
+      totalRow.appendChild(td);
     });
+    tfoot.appendChild(totalRow);
+    table.appendChild(tfoot);
 
-    container.addEventListener("input", onCellInput);
-    container.addEventListener("blur", onCellBlur, true);
-    container.addEventListener("keydown", onCellKeydown);
+    table.addEventListener("input", onScoreInput);
+    table.addEventListener("blur", onScoreBlur, true);
+    table.addEventListener("keydown", onScoreKeydown);
   }
 
-  function onCellInput(e) {
+  function buildCell(tag, text) {
+    var cell = document.createElement(tag);
+    cell.textContent = text;
+    return cell;
+  }
+
+  function onScoreInput(e) {
     var input = e.target;
-    if (!input.classList || !input.classList.contains("card-cell")) return;
+    if (!input.classList || !input.classList.contains("score-cell")) return;
 
-    var digits = input.value.replace(/[^0-9]/g, "").slice(0, 2);
-    if (digits !== input.value) input.value = digits;
-
-    var playerId = input.dataset.playerId;
-    var idx = parseInt(input.dataset.index, 10);
-    var grid = state.rounds[state.currentRound][playerId];
-
-    if (digits === "") {
-      grid[idx] = null;
-    } else {
-      var n = parseInt(digits, 10);
-      grid[idx] = n;
-    }
+    var round = parseInt(input.dataset.round, 10);
+    var raw = input.value.trim();
+    var n = raw === "" ? NaN : parseInt(raw, 10);
+    state.rounds[round][input.dataset.playerId] = isNaN(n) ? null : n;
 
     saveGame();
-    updatePlayerCardUI(playerId);
+    updateTotals();
     renderLeaderboard();
-    updateRoundTabIndicator();
     updateGameOverBanner();
   }
 
-  function onCellBlur(e) {
+  function onScoreBlur(e) {
     var input = e.target;
-    if (!input.classList || !input.classList.contains("card-cell")) return;
-    var playerId = input.dataset.playerId;
-    var idx = parseInt(input.dataset.index, 10);
-    var grid = state.rounds[state.currentRound][playerId];
-    var v = grid[idx];
-    if (v !== null && v !== undefined) {
-      if (v > 12) v = 12;
-      if (v < 0) v = 0;
-      grid[idx] = v;
-      input.value = String(v);
-      saveGame();
-      updatePlayerCardUI(playerId);
-      renderLeaderboard();
-    }
+    if (!input.classList || !input.classList.contains("score-cell")) return;
+    var round = parseInt(input.dataset.round, 10);
+    var v = state.rounds[round][input.dataset.playerId];
+    input.value = typeof v === "number" ? String(v) : "";
   }
 
-  var ARROW_DELTAS = {
+  var NAV_DELTAS = {
     ArrowUp: [-1, 0],
     ArrowDown: [1, 0],
     ArrowLeft: [0, -1],
     ArrowRight: [0, 1]
   };
 
-  function onCellKeydown(e) {
+  function onScoreKeydown(e) {
     var input = e.target;
-    if (!input.classList || !input.classList.contains("card-cell")) return;
+    if (!input.classList || !input.classList.contains("score-cell")) return;
 
     if (e.key === "Enter") {
       e.preventDefault();
-      var cells = Array.prototype.slice.call(document.querySelectorAll(".card-cell"));
+      var cells = Array.prototype.slice.call(document.querySelectorAll(".score-cell"));
       var pos = cells.indexOf(input);
       if (pos >= 0 && pos < cells.length - 1) {
         cells[pos + 1].focus();
@@ -408,24 +360,18 @@
       return;
     }
 
-    var delta = ARROW_DELTAS[e.key];
+    var delta = NAV_DELTAS[e.key];
     if (!delta) return;
     e.preventDefault();
 
-    var idx = parseInt(input.dataset.index, 10);
-    var row = Math.floor(idx / 3) + delta[0];
-    var col = (idx % 3) + delta[1];
-    var playerIdx = state.players.findIndex(function (p) { return p.id === input.dataset.playerId; });
+    var round = parseInt(input.dataset.round, 10) + delta[0];
+    var playerIdx = state.players.findIndex(function (p) { return p.id === input.dataset.playerId; }) + delta[1];
 
-    if (row < 0 || row > 2) return;
-    if (col < 0) { playerIdx -= 1; col = 2; }
-    if (col > 2) { playerIdx += 1; col = 0; }
+    if (round < 0 || round >= state.numRounds) return;
     if (playerIdx < 0 || playerIdx >= state.players.length) return;
 
-    var targetId = state.players[playerIdx].id;
-    var targetIdx = row * 3 + col;
     var target = document.querySelector(
-      '.card-cell[data-player-id="' + targetId + '"][data-index="' + targetIdx + '"]'
+      '.score-cell[data-round="' + round + '"][data-player-id="' + state.players[playerIdx].id + '"]'
     );
     if (target) {
       target.focus();
@@ -433,26 +379,11 @@
     }
   }
 
-  function updatePlayerCardUI(playerId) {
-    var card = document.querySelector('.player-grid-card[data-player-id="' + playerId + '"]');
-    if (!card) return;
-    var grid = state.rounds[state.currentRound][playerId];
-
-    card.querySelector(".player-grid-score").textContent = gridTotal(grid);
-
-    var zeroCols = matchedColumns(grid);
-    var cells = card.querySelectorAll(".card-cell");
-    cells.forEach(function (cell) {
-      var idx = parseInt(cell.dataset.index, 10);
-      var col = idx % 3;
-      cell.classList.toggle("col-zero", zeroCols.indexOf(col) !== -1);
+  function updateTotals() {
+    state.players.forEach(function (p) {
+      var cell = document.querySelector('.total-cell[data-player-id="' + p.id + '"]');
+      if (cell) cell.textContent = String(playerCumulative(p.id));
     });
-  }
-
-  function updateRoundTabIndicator() {
-    var tabs = document.querySelectorAll(".round-tab");
-    var tab = tabs[state.currentRound];
-    if (tab) tab.classList.toggle("complete", roundIsComplete(state.rounds[state.currentRound]));
   }
 
   function updateGameOverBanner() {
@@ -494,7 +425,7 @@
     var roundScores = state.players.map(function (p) {
       return {
         name: p.name,
-        rounds: state.rounds.map(function (round) { return gridTotal(round[p.id]); })
+        rounds: state.rounds.map(function (round) { return round[p.id]; })
       };
     });
 
@@ -527,7 +458,8 @@
 
     for (var r = 0; r < state.numRounds; r++) {
       var row = [String(r + 1)].concat(state.players.map(function (p) {
-        return String(gridTotal(state.rounds[r][p.id]));
+        var v = state.rounds[r][p.id];
+        return typeof v === "number" ? String(v) : "";
       }));
       lines.push(row.map(csvField).join(","));
     }

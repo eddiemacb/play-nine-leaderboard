@@ -9,7 +9,6 @@
   --red: #c0392b;
   --black: #1c2b28;
   --danger: #c0392b;
-  --zero-glow: #2ecc71;
   --radius: 12px;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.35);
@@ -248,107 +247,91 @@ main#app {
   font-size: 1.1rem;
 }
 
-/* Round nav */
-.round-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.round-tabs {
-  flex: 1;
-  display: flex;
-  gap: 0.35rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-  scrollbar-width: thin;
-}
-
-.round-tab {
-  flex: none;
-  width: 2.1rem;
-  height: 2.1rem;
-  border-radius: 50%;
-  border: 2px solid var(--card-border);
-  background: #fff;
-  font-weight: 700;
-  cursor: pointer;
+/* Scorecard */
+.scorecard-hint {
+  margin: -0.25rem 0 1rem;
   color: var(--ink-soft);
+  font-size: 0.9rem;
 }
 
-.round-tab.active {
-  border-color: var(--felt);
-  background: var(--felt);
-  color: #fff;
+.scorecard-wrap {
+  overflow-x: auto;
 }
 
-.round-tab.complete:not(.active) {
-  border-color: var(--zero-glow);
-  color: #1b8a4a;
-}
-
-/* Player grid cards (round entry) */
-.round-grids {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.player-grid-card {
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius);
-  padding: 0.85rem;
-  background: #fbfcfb;
-}
-
-.player-grid-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 0.6rem;
-}
-
-.player-grid-name {
-  font-weight: 700;
-}
-
-.player-grid-score {
-  font-weight: 800;
-  font-size: 1.2rem;
-  color: var(--felt);
-  font-variant-numeric: tabular-nums;
-}
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.4rem;
-}
-
-.card-cell {
-  aspect-ratio: 3 / 4;
+.scorecard {
+  border-collapse: collapse;
   width: 100%;
+}
+
+.scorecard th,
+.scorecard td {
+  padding: 0.4rem;
   text-align: center;
-  font-size: 1.15rem;
+  white-space: nowrap;
+}
+
+.scorecard thead th {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  padding-bottom: 0.6rem;
+  border-bottom: 2px solid var(--card-border);
+}
+
+.scorecard tbody th {
   font-weight: 700;
+  color: var(--ink-soft);
+  text-align: left;
+  padding-left: 0.2rem;
+}
+
+.scorecard tbody tr:nth-child(even) {
+  background: #f7f9f8;
+}
+
+.scorecard tfoot th,
+.scorecard tfoot td {
+  border-top: 2px solid var(--card-border);
+  padding-top: 0.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--felt);
+  text-align: left;
+}
+
+.scorecard tfoot td {
+  text-align: center;
+}
+
+.score-cell {
+  width: 4.5rem;
+  max-width: 4.5rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   border: 2px solid var(--card-border);
   border-radius: 8px;
   background: #fff;
   color: var(--ink);
-  padding: 0;
+  padding: 0.4rem 0.2rem;
 }
 
-.card-cell:focus {
+.score-cell:focus {
   outline: none;
   border-color: var(--felt);
   box-shadow: 0 0 0 3px rgba(11, 110, 79, 0.2);
 }
 
-.card-cell.col-zero {
-  border-color: var(--zero-glow);
-  background: #eafff1;
-  color: #1b8a4a;
+.score-cell::-webkit-inner-spin-button,
+.score-cell::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.score-cell {
+  -moz-appearance: textfield;
 }
 
 /* Game over banner */
