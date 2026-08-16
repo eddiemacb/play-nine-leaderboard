@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Play Nine Leaderboard</title>
+<meta name="description" content="Score keeper for the card game Play Nine.">
+<meta name="theme-color" content="#0b6e4f">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🃏</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1><span class="suit red">♥</span>Play Nine<span class="suit black">♠</span></h1>
+  <nav class="header-actions">
+    <button id="btnHistory" class="btn btn-ghost" type="button" hidden>History</button>
+    <button id="btnNewGame" class="btn btn-ghost" type="button" hidden>New Game</button>
+  </nav>
+</header>
+
+<main id="app"></main>
+
+<template id="tpl-setup">
+  <section class="panel setup-panel">
+    <h2>Start a new game</h2>
+
+    <div class="field-group">
+      <label for="numRounds">Number of rounds</label>
+      <div class="rounds-choice">
+        <select id="numRounds">
+          <option value="9" selected>9 (standard)</option>
+          <option value="4">4 (quick game)</option>
+          <option value="18">18 (double round)</option>
+          <option value="custom">Custom&hellip;</option>
+        </select>
+        <input type="number" id="numRoundsCustom" min="1" max="30" placeholder="rounds" hidden>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label>Players</label>
+      <ul id="playerList" class="player-list"></ul>
+      <button id="btnAddPlayer" class="btn btn-secondary" type="button">+ Add player</button>
+    </div>
+
+    <p class="error-msg" id="setupError" role="alert" hidden></p>
+
+    <button id="btnStartGame" class="btn btn-primary btn-large" type="button">Deal in &rarr;</button>
+  </section>
+</template>
+
+<template id="tpl-player-row">
+  <li class="player-row">
+    <input type="text" class="player-name-input" maxlength="20" autocomplete="off">
+    <button class="btn-icon btn-remove-player" type="button" aria-label="Remove player">&times;</button>
+  </li>
+</template>
+
+<template id="tpl-game">
+  <section class="leaderboard-panel panel">
+    <h2>Leaderboard</h2>
+    <ol id="leaderboardList" class="leaderboard-list"></ol>
+  </section>
+
+  <section class="round-panel panel">
+    <div class="round-nav">
+      <button id="btnPrevRound" class="btn-icon" type="button" aria-label="Previous round">&larr;</button>
+      <div class="round-tabs" id="roundTabs"></div>
+      <button id="btnNextRound" class="btn-icon" type="button" aria-label="Next round">&rarr;</button>
+    </div>
+    <div id="roundGrids" class="round-grids"></div>
+  </section>
+
+  <div id="gameOverBanner" class="game-over-banner" hidden>
+    <div class="game-over-content">
+      <h2>🏆 Game Over!</h2>
+      <p id="gameOverWinner"></p>
+      <div class="game-over-actions">
+        <button id="btnSaveGame" class="btn btn-primary" type="button">Save &amp; start new game</button>
+        <button id="btnKeepPlaying" class="btn btn-secondary" type="button">Keep editing</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-player-grid-card">
+  <div class="player-grid-card">
+    <div class="player-grid-header">
+      <span class="player-grid-name"></span>
+      <span class="player-grid-score"></span>
+    </div>
+    <div class="card-grid">
+      <!-- 9 cells injected -->
+    </div>
+  </div>
+</template>
+
+<template id="tpl-history">
+  <section class="panel history-panel">
+    <h2>Game History</h2>
+    <div id="historyList" class="history-list"></div>
+    <div class="history-actions">
+      <button id="btnBackFromHistory" class="btn btn-secondary" type="button">&larr; Back</button>
+      <button id="btnClearHistory" class="btn btn-text-danger" type="button">Clear history</button>
+    </div>
+  </section>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
