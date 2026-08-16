@@ -10,6 +10,7 @@
   var app = document.getElementById("app");
   var btnHistory = document.getElementById("btnHistory");
   var btnNewGame = document.getElementById("btnNewGame");
+  var btnExport = document.getElementById("btnExport");
 
   var state = null; // current in-progress game, or null
   var view = "setup"; // 'setup' | 'game' | 'history'
@@ -137,6 +138,7 @@
       if (!btn) return;
       if (playerList.children.length <= 1) return;
       btn.closest(".player-row").remove();
+      renumberPlaceholders(playerList);
     });
 
     numRoundsSel.addEventListener("change", function () {
@@ -187,6 +189,12 @@
     input.value = name || "";
     input.placeholder = "Player " + (playerList.children.length + 1);
     playerList.appendChild(node);
+  }
+
+  function renumberPlaceholders(playerList) {
+    Array.prototype.forEach.call(playerList.children, function (row, i) {
+      row.querySelector(".player-name-input").placeholder = "Player " + (i + 1);
+    });
   }
 
   function startGame(players, numRounds) {
@@ -376,17 +384,52 @@
     }
   }
 
+  var ARROW_DELTAS = {
+    ArrowUp: [-1, 0],
+    ArrowDown: [1, 0],
+    ArrowLeft: [0, -1],
+    ArrowRight: [0, 1]
+  };
+
   function onCellKeydown(e) {
-    if (e.key !== "Enter") return;
-    if (!e.target.classList || !e.target.classList.contains("card-cell")) return;
+    var input = e.target;
+    if (!input.classList || !input.classList.contains("card-cell")) return;
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      var cells = Array.prototype.slice.call(document.querySelectorAll(".card-cell"));
+      var pos = cells.indexOf(input);
+      if (pos >= 0 && pos < cells.length - 1) {
+        cells[pos + 1].focus();
+        cells[pos + 1].select();
+      } else {
+        input.blur();
+      }
+      return;
+    }
+
+    var delta = ARROW_DELTAS[e.key];
+    if (!delta) return;
     e.preventDefault();
-    var cells = Array.prototype.slice.call(document.querySelectorAll(".card-cell"));
-    var pos = cells.indexOf(e.target);
-    if (pos >= 0 && pos < cells.length - 1) {
-      cells[pos + 1].focus();
-      cells[pos + 1].select();
-    } else {
-      e.target.blur();
+
+    var idx = parseInt(input.dataset.index, 10);
+    var row = Math.floor(idx / 3) + delta[0];
+    var col = (idx % 3) + delta[1];
+    var playerIdx = state.players.findIndex(function (p) { return p.id === input.dataset.playerId; });
+
+    if (row < 0 || row > 2) return;
+    if (col < 0) { playerIdx -= 1; col = 2; }
+    if (col > 2) { playerIdx += 1; col = 0; }
+    if (playerIdx < 0 || playerIdx >= state.players.length) return;
+
+    var targetId = state.players[playerIdx].id;
+    var targetIdx = row * 3 + col;
+    var target = document.querySelector(
+      '.card-cell[data-player-id="' + targetId + '"][data-index="' + targetIdx + '"]'
+    );
+    if (target) {
+      target.focus();
+      target.select();
     }
   }
 
@@ -448,12 +491,20 @@
 
     var winners = ranked.filter(function (p) { return p.total === ranked[0].total; });
 
+    var roundScores = state.players.map(function (p) {
+      return {
+        name: p.name,
+        rounds: state.rounds.map(function (round) { return gridTotal(round[p.id]); })
+      };
+    });
+
     var history = loadHistory();
     history.unshift({
       date: new Date().toISOString(),
       numRounds: state.numRounds,
       players: ranked,
-      winnerName: winners.map(function (w) { return w.name; }).join(" & ")
+      winnerName: winners.map(function (w) { return w.name; }).join(" & "),
+      roundScores: roundScores
     });
     saveHistory(history);
 
@@ -461,6 +512,45 @@
     state = null;
     view = "setup";
     render();
+  }
+
+  // ---------- CSV export ----------
+
+  function csvField(value) {
+    var s = String(value);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function gameToCsv() {
+    var header = ["Round"].concat(state.players.map(function (p) { return p.name; }));
+    var lines = [header.map(csvField).join(",")];
+
+    for (var r = 0; r < state.numRounds; r++) {
+      var row = [String(r + 1)].concat(state.players.map(function (p) {
+        return String(gridTotal(state.rounds[r][p.id]));
+      }));
+      lines.push(row.map(csvField).join(","));
+    }
+
+    var totalRow = ["Total"].concat(state.players.map(function (p) {
+      return String(playerCumulative(p.id));
+    }));
+    lines.push(totalRow.map(csvField).join(","));
+
+    return lines.join("\r\n");
+  }
+
+  function exportCsv() {
+    var csv = gameToCsv();
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "play-nine-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // ---------- history screen ----------
@@ -491,6 +581,11 @@
           rowsHtml;
         var nameSpans = entry.querySelectorAll(".h-row span:first-child");
         game.players.forEach(function (p, i) { nameSpans[i].textContent = p.name; });
+
+        if (game.roundScores && game.roundScores.length) {
+          entry.appendChild(buildRoundDetail(game));
+        }
+
         list.appendChild(entry);
       });
     }
@@ -509,11 +604,52 @@
     });
   }
 
+  function buildRow(tag, cellValues) {
+    var tr = document.createElement("tr");
+    cellValues.forEach(function (text) {
+      var cell = document.createElement(tag);
+      cell.textContent = text;
+      tr.appendChild(cell);
+    });
+    return tr;
+  }
+
+  function buildRoundDetail(game) {
+    var details = document.createElement("details");
+    details.className = "history-detail";
+
+    var summary = document.createElement("summary");
+    summary.textContent = "View round-by-round";
+    details.appendChild(summary);
+
+    var table = document.createElement("table");
+    table.className = "history-table";
+
+    var thead = document.createElement("thead");
+    thead.appendChild(buildRow("th", ["Round"].concat(game.roundScores.map(function (p) { return p.name; }))));
+    table.appendChild(thead);
+
+    var tbody = document.createElement("tbody");
+    for (var r = 0; r < game.numRounds; r++) {
+      tbody.appendChild(buildRow("td", [String(r + 1)].concat(
+        game.roundScores.map(function (p) { return String(p.rounds[r]); })
+      )));
+    }
+    table.appendChild(tbody);
+
+    var wrapper = document.createElement("div");
+    wrapper.className = "history-table-wrap";
+    wrapper.appendChild(table);
+    details.appendChild(wrapper);
+    return details;
+  }
+
   // ---------- top-level render / header ----------
 
   function render() {
     btnNewGame.hidden = !state || view === "setup";
     btnHistory.hidden = view === "history";
+    btnExport.hidden = !state || view !== "game";
 
     if (view === "history") {
       renderHistory();
@@ -528,6 +664,10 @@
   btnHistory.addEventListener("click", function () {
     view = "history";
     render();
+  });
+
+  btnExport.addEventListener("click", function () {
+    if (state) exportCsv();
   });
 
   btnNewGame.addEventListener("click", function () {

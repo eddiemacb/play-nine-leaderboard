@@ -428,6 +428,42 @@ main#app {
 }
 .btn-text-danger:hover { text-decoration: underline; }
 
+.history-detail {
+  margin-top: 0.65rem;
+}
+
+.history-detail summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--felt);
+}
+
+.history-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+
+.history-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85rem;
+}
+
+.history-table th,
+.history-table td {
+  padding: 0.35rem 0.6rem;
+  text-align: right;
+  border-bottom: 1px solid var(--card-border);
+  white-space: nowrap;
+}
+
+.history-table th:first-child,
+.history-table td:first-child {
+  text-align: left;
+  color: var(--ink-soft);
+}
+
 .empty-state {
   color: var(--ink-soft);
   text-align: center;
